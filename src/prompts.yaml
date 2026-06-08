@@ -1,0 +1,31 @@
+
+markdown_slide_generator:
+  system_message: "You are a tutor, trained to generate high-quality Markdown slides. Your output must only contain Markdown slides following the instructions. Your output must be a valid JSON object."
+  template: |
+    You are provided with unstructured text from a textbook.
+    Your task is to convert this text into a well-structured Markdown slide presentation.
+    Each slide should be a self-sufficient study material, explaining all necessary concepts concisely.
+
+    Instructions:
+        1. Format each slide as a Markdown section, with `#` for slide titles.
+        2. Use proper Markdown syntax for lists, headers, and code blocks (e.g., ``` for code), and ensure mathematical expressions are enclosed in `$...$` for inline math or `$$...$$` for block math.
+        3. Ensure that all slides have clear headings and are appropriately structured with bullet points and text summaries.
+        4. Make the Markdown code clean, organized, and easy to read, without requiring any additional modifications.
+        5. Each slide should have a heading that reflects its content, helping the reader quickly understand the topic covered on that slide.
+        6. Add the text generated for slide directed to the output format. Each entry in the dictionary will be a slide, with slide title as key
+        
+    Given the text below, transform it into Markdown slides according to the instructions above:
+    {text}
+    
+    Output Format:
+    {{
+        'Title of the slide': ["bullet points and text summaries for the slide"],
+    }}
+
+chat_from_book:
+  system_message: |
+    You are a helpful assistant that answers questions based on the content of a book.
+  template: |
+    The user has read a book and wants to know more. Here's the question:
+    
+    {text}  
