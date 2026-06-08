@@ -6,15 +6,16 @@ The project is built as a practical study tool: part document parser, part slide
 
 ## Features
 
-- Upload PDF or TXT documents through a Streamlit web app
+- Process 2 document formats, PDF and TXT, through a Streamlit web app
+- Run a 4-stage document-to-slides pipeline: document ingestion, TOC extraction, chapter segmentation, and slide generation
 - Extract PDF table-of-contents data with PyMuPDF
-- Segment chapters and headings into study-sized chunks
-- Generate Markdown slide summaries with OpenRouter
-- Fall back to local heuristic slides when API access is unavailable
+- Segment documents across 2 levels of granularity: chapter-level and heading-level chunks
+- Generate structured Markdown slide summaries with OpenRouter, requesting 2 to 4 study slides per heading chunk
+- Fall back to local heuristic slide generation for offline use when API access is unavailable
 - Browse generated slides in a two-column study interface
 - Chat with an OpenRouter-backed assistant before and after slide generation
-- Use the active slide section as chat context after a deck is generated
-- Export generated slides as a `.pptx` PowerPoint file
+- Scope chat context to 1 active slide section after a deck is generated
+- Export generated slides as 1 downloadable `.pptx` PowerPoint file
 - Use a bundled test PDF for quick local debugging
 
 ## Tech Stack
@@ -32,13 +33,12 @@ OpenRouter is called directly with Python's standard HTTP library in `src/openro
 
 ## How It Works
 
-1. The user uploads a PDF or TXT file in `webapp.py`.
-2. `main.py` starts the document-to-slides pipeline.
-3. `src/utils.py` reads PDF pages and extracts the table of contents.
-4. `src/segmentor.py` groups page content by chapter and heading.
-5. `src/slide_generator.py` asks OpenRouter to create Markdown slide content.
-6. If API access fails and fallback is enabled, local heuristic slides are generated instead.
-7. The Streamlit UI displays the deck, enables chat, and offers a PowerPoint download.
+1. Document ingestion: the user uploads 1 of 2 supported formats, PDF or TXT, in `webapp.py`, and `main.py` starts the document-to-slides pipeline.
+2. TOC extraction: `src/utils.py` reads the uploaded document and extracts table-of-contents entries.
+3. Chapter segmentation: `src/segmentor.py` groups document content into 2 chunk levels: chapters and headings.
+4. Slide generation: `src/slide_generator.py` asks OpenRouter to create structured Markdown slide summaries for each heading chunk, with the prompt requesting 2 to 4 study slides.
+5. If API access is unavailable and fallback is enabled, local heuristic slide generation is used for offline operation.
+6. The Streamlit UI displays the deck, scopes chat to 1 active slide section, and offers 1 downloadable `.pptx` PowerPoint export.
 
 ## Project Structure
 
