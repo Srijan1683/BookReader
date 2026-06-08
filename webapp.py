@@ -2,6 +2,7 @@ import asyncio
 import nest_asyncio
 import json
 import tempfile
+import html
 from io import BytesIO
 
 import streamlit as st
@@ -100,11 +101,101 @@ def _render_chat_message(role, text):
         f"""
         <div class="chat-bubble {bubble_class}">
             <div class="chat-label">{label}</div>
-            <div>{text}</div>
+            <div>{html.escape(text)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def _render_chatbot(chapter_title=None, section_title=None, slide_markdown_list=None):
+    has_slide_context = bool(chapter_title and section_title and slide_markdown_list)
+    intro_copy = (
+        "Ask follow-up questions about the active section. API errors appear here without affecting the slide deck."
+        if has_slide_context
+        else "Ask general study questions while you prepare a document. Once slides are generated, chat will use the active section."
+    )
+
+    st.markdown(
+        f"""
+        <div class="panel">
+            <div class="panel-title">{CHAT_ICON}<span>Chatbot Workspace</span></div>
+            <div style="color: rgba(217, 230, 236, 0.72); margin-bottom: 0.9rem;">
+                {intro_copy}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    st.markdown("<div class='chat-shell'>", unsafe_allow_html=True)
+    if st.session_state.chat_history:
+        for chat in st.session_state.chat_history[::-1]:
+            _render_chat_message(chat["role"], chat["text"])
+    else:
+        initial_message = (
+            "Ask about the current section once slides are loaded."
+            if has_slide_context
+            else "Add your OpenRouter key in .env, then ask me a study question or generate slides from a document."
+        )
+        st.markdown(
+            f"""
+            <div class="chat-bubble chat-assistant">
+                <div class="chat-label">Assistant</div>
+                <div>{initial_message}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    with st.form("chat_form", clear_on_submit=True):
+        question = st.text_input("Type your question here:")
+        submitted = st.form_submit_button("Ask")
+
+    if submitted and question.strip():
+        question = question.strip()
+        with st.spinner("Thinking..."):
+            try:
+                if has_slide_context:
+                    user_content = f"""
+Chapter: {chapter_title}
+Section: {section_title}
+
+Slides:
+{_slides_to_plain_text(slide_markdown_list)}
+
+Question:
+{question}
+"""
+                    system_content = (
+                        "You answer student questions about the current book section. "
+                        "Use the provided slide content as your source and answer briefly."
+                    )
+                else:
+                    user_content = question
+                    system_content = (
+                        "You are a helpful study assistant for a document-to-slides app. "
+                        "Answer clearly and briefly. If the user asks about uploaded slides, explain that slide context appears after generation."
+                    )
+
+                answer = chat_completion(
+                    [
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                    temperature=0.2,
+                    max_tokens=700,
+                ).strip()
+                st.session_state.chat_history.append({"role": "user", "text": question})
+                st.session_state.chat_history.append({"role": "assistant", "text": answer})
+            except Exception as e:
+                st.session_state.chat_history.append({"role": "user", "text": question})
+                st.session_state.chat_history.append({"role": "assistant", "text": f"Error: {e}"})
+        st.rerun()
 
 
 st.set_page_config(page_title="Book Slide Generator", layout="wide")
@@ -353,29 +444,36 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    "Drop in a PDF or TXT file to build an interactive study deck."
-)
+setup_left, setup_right = st.columns([1.2, 0.8], gap="large")
 
-uploaded_file = st.file_uploader("Upload a book (PDF or TXT)", type=["pdf", "txt"])
+with setup_left:
+    st.markdown(
+        "Drop in a PDF or TXT file to build an interactive study deck."
+    )
 
-if uploaded_file:
-    file_ext = uploaded_file.name.split('.')[-1].lower()
-    with tempfile.NamedTemporaryFile(delete=False, suffix="." + file_ext) as tmp_file:
-        tmp_file.write(uploaded_file.read())
-        tmp_path = tmp_file.name
+    uploaded_file = st.file_uploader("Upload a book (PDF or TXT)", type=["pdf", "txt"])
 
-    # Button to trigger slide generation
-    if st.button("Generate Slides from Text"):
-        st.info(f"Generating Slides from the Uploaded {file_ext.upper()}: {uploaded_file.name}")
-        with st.spinner("Generating slides..."):
-            try:
-                status, json_path = main(tmp_path)
-                if status == 1:
-                    _load_slides_into_state(json_path)
-            except Exception as e:
-                st.error(f"Failed to generate slides: {e}")
-                st.session_state.slides_generated = False
+    if uploaded_file:
+        file_ext = uploaded_file.name.split('.')[-1].lower()
+        with tempfile.NamedTemporaryFile(delete=False, suffix="." + file_ext) as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            tmp_path = tmp_file.name
+
+        # Button to trigger slide generation
+        if st.button("Generate Slides from Text"):
+            st.info(f"Generating Slides from the Uploaded {file_ext.upper()}: {uploaded_file.name}")
+            with st.spinner("Generating slides..."):
+                try:
+                    status, json_path = main(tmp_path)
+                    if status == 1:
+                        _load_slides_into_state(json_path)
+                except Exception as e:
+                    st.error(f"Failed to generate slides: {e}")
+                    st.session_state.slides_generated = False
+
+if not st.session_state.get("slides_generated", False):
+    with setup_right:
+        _render_chatbot()
 
 if st.session_state.get("slides_generated", False):
     # Retrieve slides data from session state
@@ -474,74 +572,6 @@ if st.session_state.get("slides_generated", False):
                 st.caption(f"Slides data is stored temporarily at: {st.session_state.json_path}")
 
             with right_col:
-                st.markdown(
-                    f"""
-                    <div class="panel">
-                        <div class="panel-title">{CHAT_ICON}<span>Chatbot Workspace</span></div>
-                        <div style="color: rgba(217, 230, 236, 0.72); margin-bottom: 0.9rem;">
-                            Ask follow-up questions about the active section. API errors appear here without
-                            affecting the slide deck.
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                if "chat_history" not in st.session_state:
-                    st.session_state.chat_history = []
-
-                st.markdown("<div class='chat-shell'>", unsafe_allow_html=True)
-                if st.session_state.chat_history:
-                    for chat in st.session_state.chat_history[::-1]:
-                        _render_chat_message(chat["role"], chat["text"])
-                else:
-                    st.markdown(
-                        """
-                        <div class="chat-bubble chat-assistant">
-                            <div class="chat-label">Assistant</div>
-                            Ask about the current section once slides are loaded.
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                question = st.text_input("Type your question here:", key="chat_question")
-                if question:
-                    with st.spinner("Thinking..."):
-                        try:
-                            answer = chat_completion(
-                                [
-                                    {
-                                        "role": "system",
-                                        "content": (
-                                            "You answer student questions about the current book section. "
-                                            "Use the provided slide content as your source and answer briefly."
-                                        ),
-                                    },
-                                    {
-                                        "role": "user",
-                                        "content": f"""
-Chapter: {chapter_title}
-Section: {section_title}
-
-Slides:
-{_slides_to_plain_text(slide_markdown_list)}
-
-Question:
-{question}
-""",
-                                    },
-                                ],
-                                temperature=0.2,
-                                max_tokens=700,
-                            )
-                            answer = answer.strip()
-                            st.session_state.chat_history.append({"role": "user", "text": question})
-                            st.session_state.chat_history.append({"role": "assistant", "text": answer})
-                        except Exception as e:
-                            st.session_state.chat_history.append({"role": "user", "text": question})
-                            st.session_state.chat_history.append({"role": "assistant", "text": f"Error: {e}"})
-                    st.rerun()
+                _render_chatbot(chapter_title, section_title, slide_markdown_list)
         else:
             st.warning("No slides available to display.")

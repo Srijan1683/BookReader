@@ -1,13 +1,10 @@
-from sentence_transformers import SentenceTransformer, util
 import unicodedata
-import numpy as np
+from difflib import SequenceMatcher
 
 from src.utils import *
 from src.models import TOC, ChapterTOC, Page, Headings
 
 from collections import defaultdict
-
-EMBED_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
 
 def normalize_unicode(text):
     return unicodedata.normalize('NFKD', text)
@@ -28,24 +25,23 @@ def preprocess_text(text):
     text = normalize_punctuation(text)
     return text.lower()
 
-def create_embeddings(text_lines):
-    return EMBED_MODEL.encode(text_lines)
-
 def find_most_similar_heading_index(page_lines, heading):
     normalized_heading = preprocess_text(heading)
     processed_lines = [preprocess_text(line) for line in page_lines]
-    
-    # Create embeddings for the page lines and the heading
-    page_embeddings = create_embeddings(processed_lines)
-    heading_embedding = EMBED_MODEL.encode([normalized_heading])[0]
-    
-    # Calculate cosine similarity between the heading and each line
-    similarities = util.cos_sim(heading_embedding, page_embeddings)[0]
-    
-    # Find the line with the highest similarity score
-    most_similar_idx = np.argmax(similarities)
-    
-    return most_similar_idx, similarities[most_similar_idx].item()
+
+    best_idx = 0
+    best_score = -1.0
+    for idx, line in enumerate(processed_lines):
+        if not line:
+            continue
+        score = SequenceMatcher(None, normalized_heading, line).ratio()
+        if normalized_heading and normalized_heading in line:
+            score = max(score, 0.98)
+        if score > best_score:
+            best_idx = idx
+            best_score = score
+
+    return best_idx, best_score
     
 
 def segment_page_by_headings(page_text, headings):

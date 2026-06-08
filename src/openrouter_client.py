@@ -1,11 +1,14 @@
 import os
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+REQUEST_TIMEOUT_SECONDS = 60
 
 
 def get_openrouter_model():
@@ -13,37 +16,56 @@ def get_openrouter_model():
     return os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
 
 
-def get_openrouter_client():
+def get_openrouter_api_key():
     load_dotenv()
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise ValueError(
             "OPENROUTER_API_KEY is missing. Add it to .env or enable local fallback."
         )
+    return api_key
 
-    return OpenAI(
-        api_key=api_key,
-        base_url=os.getenv("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL),
-        default_headers={
-            "HTTP-Referer": os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:8501"),
-            "X-OpenRouter-Title": os.getenv("OPENROUTER_APP_TITLE", "Book Reader"),
-        },
-    )
+
+def get_openrouter_base_url():
+    load_dotenv()
+    return os.getenv("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL).rstrip("/")
 
 
 def chat_completion(messages, *, model=None, temperature=0.3, max_tokens=1200, response_format=None):
-    client = get_openrouter_client()
-    params = {
+    payload = {
         "model": model or get_openrouter_model(),
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
     if response_format is not None:
-        params["response_format"] = response_format
+        payload["response_format"] = response_format
 
-    response = client.chat.completions.create(**params)
-    return response.choices[0].message.content or ""
+    request = Request(
+        f"{get_openrouter_base_url()}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {get_openrouter_api_key()}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:8501"),
+            "X-OpenRouter-Title": os.getenv("OPENROUTER_APP_TITLE", "Book Reader"),
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            response_data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenRouter request failed with HTTP {exc.code}: {error_body}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"OpenRouter request failed: {exc.reason}") from exc
+
+    try:
+        return response_data["choices"][0]["message"].get("content") or ""
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"Unexpected OpenRouter response: {response_data}") from exc
 
 
 def is_api_availability_error(exc):

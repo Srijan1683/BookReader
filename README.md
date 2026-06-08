@@ -21,6 +21,7 @@ What works now:
 - PDF TOC extraction with PyMuPDF
 - chapter segmentation based on TOC entries
 - OpenRouter-backed slide generation and chat
+- chatbot available before and after slide generation
 - local slide generation fallback when API access is unavailable
 - PowerPoint export for generated slides
 - stable local test PDF for debugging
@@ -37,7 +38,7 @@ What is limited right now:
 - `src/utils.py`: PDF page loading and TOC segmentation
 - `src/segmentor.py`: chapter and heading segmentation
 - `src/slide_generator.py`: OpenRouter path plus local fallback summarizer
-- `src/openrouter_client.py`: shared OpenRouter client configuration
+- `src/openrouter_client.py`: shared direct OpenRouter HTTP client
 - `scripts/generate_test_pdf.py`: generates the debugging PDF
 - `test_assets/book_reader_test.pdf`: stable test input for the pipeline
 
@@ -124,6 +125,20 @@ Defined in `.env.example`:
 - `BOOK_READER_TEST_PDF`
 
 `OPENROUTER_MODEL` accepts any OpenRouter model ID, so switching from `openrouter/free` to a specific model is an `.env` change rather than a code change.
+
+Example `.env`:
+
+```bash
+OPENROUTER_API_KEY=sk-or-your-openrouter-key
+OPENROUTER_MODEL=openrouter/free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_HTTP_REFERER=http://localhost:8501
+OPENROUTER_APP_TITLE=Book Reader
+ALLOW_LOCAL_SLIDE_FALLBACK=true
+BOOK_READER_TEST_PDF=test_assets/book_reader_test.pdf
+```
+
+The app calls OpenRouter directly with Python's standard HTTP library. This avoids OpenAI SDK/httpx version conflicts such as `Client.__init__() got an unexpected keyword argument 'proxies'`.
 
 ## Notes To Self
 
