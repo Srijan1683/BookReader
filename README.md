@@ -20,14 +20,14 @@ What works now:
 - Streamlit UI with a slide viewer and chatbot panel
 - PDF TOC extraction with PyMuPDF
 - chapter segmentation based on TOC entries
-- local slide generation fallback when Gemini is unavailable
+- OpenRouter-backed slide generation and chat
+- local slide generation fallback when API access is unavailable
 - PowerPoint export for generated slides
 - stable local test PDF for debugging
 
 What is limited right now:
 
-- Gemini quota is unavailable in the current free setup
-- chatbot calls may still return Gemini quota errors
+- AI-generated slides and chat require a working OpenRouter key/model; the default `openrouter/free` router uses currently available free models
 - local slide generation is heuristic, not true LLM-quality summarization
 
 ## Main Files
@@ -36,7 +36,8 @@ What is limited right now:
 - `main.py`: core slide-generation pipeline entry point
 - `src/utils.py`: PDF page loading and TOC segmentation
 - `src/segmentor.py`: chapter and heading segmentation
-- `src/slide_generator.py`: Gemini path plus local fallback summarizer
+- `src/slide_generator.py`: OpenRouter path plus local fallback summarizer
+- `src/openrouter_client.py`: shared OpenRouter client configuration
 - `scripts/generate_test_pdf.py`: generates the debugging PDF
 - `test_assets/book_reader_test.pdf`: stable test input for the pipeline
 
@@ -55,7 +56,6 @@ book_reader1/
 │   ├── __init__.py
 │   ├── config.py
 │   ├── llm.py
-│   ├── llm_gemini.py
 │   ├── models.py
 │   ├── prompts.yaml
 │   ├── segmentor.py
@@ -82,7 +82,7 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-streamlit run webapp.py
+python -m streamlit run webapp.py
 ```
 
 ## Useful Commands
@@ -90,7 +90,7 @@ streamlit run webapp.py
 Run the app:
 
 ```bash
-streamlit run webapp.py
+python -m streamlit run webapp.py
 ```
 
 Generate the bundled test PDF again:
@@ -108,25 +108,29 @@ pytest tests/test_toc.py -q
 Quick syntax check:
 
 ```bash
-python -m py_compile webapp.py main.py src/utils.py src/slide_generator.py
+python -m py_compile webapp.py main.py src/openrouter_client.py src/slide_generator.py
 ```
 
 ## Environment Variables
 
 Defined in `.env.example`:
 
-- `OPENAI_API_KEY`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+- `OPENROUTER_BASE_URL`
+- `OPENROUTER_HTTP_REFERER`
+- `OPENROUTER_APP_TITLE`
 - `ALLOW_LOCAL_SLIDE_FALLBACK`
 - `BOOK_READER_TEST_PDF`
 
+`OPENROUTER_MODEL` accepts any OpenRouter model ID, so switching from `openrouter/free` to a specific model is an `.env` change rather than a code change.
+
 ## Notes To Self
 
-- The app should remain usable even when Gemini fails.
+- The app should remain usable even when API calls fail.
 - UI polish matters here because the project is part demo, part workflow tool.
 - Keep the local fallback path healthy so development is not blocked by quota.
-- If Gemini becomes available later, the same app should improve without a major rewrite.
+- Use `OPENROUTER_MODEL` to swap models without code changes.
 
 ## Next Good Improvements
 

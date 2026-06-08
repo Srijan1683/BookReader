@@ -1,12 +1,10 @@
 import os
 import yaml
-from openai import OpenAI
 from dotenv import load_dotenv
-from src.config import OPENAI_API_KEY
+
+from src.openrouter_client import chat_completion, get_openrouter_model
 
 load_dotenv()  # Loads variables from .env into environment
-
-API_KEY = os.getenv("OPENAI_API_KEY")
 
 class LLM:
     def __init__(self, config_file: str):
@@ -17,23 +15,14 @@ class LLM:
             config = yaml.safe_load(file)
         print("Full loaded config:", config)
 
-        # Check different possible locations for api_key
-        self.api_key = (
-            config.get("openai", {}).get("api_key") or
-            config.get("api_key")  # fallback if api_key is at root
-        )
         self.model = (
+            config.get("openrouter", {}).get("model") or
             config.get("openai", {}).get("model") or
-            config.get("model", "gpt-4o")
+            config.get("model") or
+            get_openrouter_model()
         )
 
-        print(f"API key is set: {bool(self.api_key)}")
         print(f"Model selected: {self.model}")
-
-        # Initialize client only if key is valid
-        if not self.api_key:
-            raise ValueError("OpenAI API key is missing in the config file.")
-        self.client = OpenAI(api_key=self.api_key)
 
     def get_prompt(self, prompt_name: str):
         with open(self.config_file, 'r') as file:
@@ -57,26 +46,23 @@ class LLM:
         if response_format:
             params["response_format"] = response_format
 
-        response = self.client.chat.completions.create(**params)
-        return response.choices[0].message.content
+        return chat_completion(**params)
     
     
 class PromptGenerator:
     def __init__(self, prompt_name, config_file, api_key=None):
         """
-        Initializes the PromptGenerator with prompt configuration and OpenAI client.
+        Initializes the PromptGenerator with prompt configuration.
         
         Args:
             prompt_name (str): The name of the prompt as defined in the YAML file.
             config_file (str): The path to the user-defined YAML file containing prompt definitions.
-            api_key (str, optional): The OpenAI API key. If not provided, it will be read from the OPENAI_KEY environment variable.
+            api_key (str, optional): Deprecated. OpenRouter uses OPENROUTER_API_KEY from the environment.
         """
         self.prompt_data = self.load_prompt_data(prompt_name, config_file)
         self.system_message = self.prompt_data['system_message']
         self.template = self.prompt_data['template']
         
-        self.api_key = api_key or os.getenv("OPENAI_KEY")
-        self.client = OpenAI(api_key=self.api_key)
         self.token_usage = {
             'prompt_tokens': 0,
             'completion_tokens': 0
@@ -113,7 +99,7 @@ class PromptGenerator:
 
     def get_messages(self, **prompt_kwargs):
         """
-        Formats the messages to be sent to the OpenAI API.
+        Formats the messages to be sent to the OpenRouter chat API.
 
         Args:
             **prompt_kwargs: Keyword arguments to replace placeholders in the prompt template.
@@ -129,10 +115,10 @@ class PromptGenerator:
 
     def generate_response(self, model, temperature=0, response_format=None, **prompt_kwargs):
         """
-        Generates a response using the OpenAI model based on the provided prompt.
+        Generates a response using the configured OpenRouter model.
 
         Args:
-            model (str): The name of the model to use for generating the response.
+            model (str): OpenRouter model ID to use for generating the response.
             temperature (float): Controls the randomness of the response.
             response_format (str, optional): The format of the response.
             **prompt_kwargs: Keyword arguments for replacing placeholders in the prompt template.
@@ -151,17 +137,14 @@ class PromptGenerator:
         if response_format is not None:
             params["response_format"] = response_format
 
-        response = self.client.chat.completions.create(**params)
-        self.update_usage(response)
-
-        return response.choices[0].message.content
+        return chat_completion(**params)
 
     def update_usage(self, response):
         """
-        Updates the token usage statistics based on the response from the OpenAI model.
+        Updates the token usage statistics based on the response from the chat model.
 
         Args:
-            response (object): The response object from the OpenAI API.
+            response (object): The response object from the chat API.
         """
         self.token_usage['prompt_tokens'] = response.usage.prompt_tokens
         self.token_usage['completion_tokens'] = response.usage.completion_tokens

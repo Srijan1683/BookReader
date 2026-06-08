@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from pptx import Presentation
 
 from main import main
+from src.openrouter_client import chat_completion
 
 # Apply nest_asyncio to handle async loops in streamlit
 asyncio.set_event_loop(asyncio.new_event_loop())
@@ -478,8 +479,8 @@ if st.session_state.get("slides_generated", False):
                     <div class="panel">
                         <div class="panel-title">{CHAT_ICON}<span>Chatbot Workspace</span></div>
                         <div style="color: rgba(217, 230, 236, 0.72); margin-bottom: 0.9rem;">
-                            Ask follow-up questions about the active section. If Gemini quota is unavailable,
-                            the error will appear here without affecting the slide deck.
+                            Ask follow-up questions about the active section. API errors appear here without
+                            affecting the slide deck.
                         </div>
                     </div>
                     """,
@@ -509,24 +510,33 @@ if st.session_state.get("slides_generated", False):
                 if question:
                     with st.spinner("Thinking..."):
                         try:
-                            import google.generativeai as genai
+                            answer = chat_completion(
+                                [
+                                    {
+                                        "role": "system",
+                                        "content": (
+                                            "You answer student questions about the current book section. "
+                                            "Use the provided slide content as your source and answer briefly."
+                                        ),
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": f"""
+Chapter: {chapter_title}
+Section: {section_title}
 
-                            client = genai.GenerativeModel("gemini-2.0-flash")
-                            response = client.generate_content(
-                                f"""
-                                You are provided the following slide content from a book.
+Slides:
+{_slides_to_plain_text(slide_markdown_list)}
 
-                                Chapter: {chapter_title}
-                                Section: {section_title}
-
-                                Slides:
-                                {_slides_to_plain_text(slide_markdown_list)}
-
-                                Answer this question briefly and clearly:
-                                {question}
-                                """
+Question:
+{question}
+""",
+                                    },
+                                ],
+                                temperature=0.2,
+                                max_tokens=700,
                             )
-                            answer = response.text.strip()
+                            answer = answer.strip()
                             st.session_state.chat_history.append({"role": "user", "text": question})
                             st.session_state.chat_history.append({"role": "assistant", "text": answer})
                         except Exception as e:

@@ -5,6 +5,9 @@ from pathlib import Path
 import os
 
 import chromadb
+from sentence_transformers import SentenceTransformer
+
+from src.openrouter_client import chat_completion
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CHROMA_DIR = PROJECT_ROOT / "backend" / "output" / "chroma_db"
@@ -13,9 +16,8 @@ CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 chroma_db = chroma_client.get_or_create_collection(name="textbook_slides_3")
 
-from openai import OpenAI
-API_KEY = os.getenv('API_KEY')
-openai_client = OpenAI(api_key=API_KEY)
+EMBEDDING_MODEL_NAME = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 def llm_response(text, context):
     
@@ -34,19 +36,13 @@ def llm_response(text, context):
     Your answer must be in the detailed as if you are teaching in a one on one session with the student.
     """
     
-    completion = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt}],
-            temperature=0
-        )
-
-    output = completion.choices[0].message.content
-    output_prompt_tokens = completion.usage.prompt_tokens
-    output_completion_tokens = completion.usage.completion_tokens
-    print(f"Output Prompt Tokens: {output_prompt_tokens}")
-    print(f"Output Completion Tokens: {output_completion_tokens}")
+    output = chat_completion(
+        [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0,
+    )
     return output
 
 def llm_response_null(text, context):
@@ -63,29 +59,18 @@ def llm_response_null(text, context):
     Your answer must be in the detailed as if you are teaching in a one on one session with the student.
     """
     
-    completion = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt}],
-            temperature=0
-        )
-
-    output = completion.choices[0].message.content
-    output_prompt_tokens = completion.usage.prompt_tokens
-    output_completion_tokens = completion.usage.completion_tokens
-    print(f"Output Prompt Tokens: {output_prompt_tokens}")
-    print(f"Output Completion Tokens: {output_completion_tokens}")
+    output = chat_completion(
+        [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0,
+    )
     return output
 
 
 def embed_func(text):
-
-    response = openai_client.embeddings.create(
-        input=text,
-        model="text-embedding-3-small")
-    
-    return response.data[0].embedding
+    return embedding_model.encode(text).tolist()
 
 def clean_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)

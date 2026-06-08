@@ -1,12 +1,5 @@
-import os
-from dotenv import load_dotenv
 from rag.retriever import get_top_k_docs
-import google.generativeai as genai
-
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-model = genai.GenerativeModel("gemini-pro")
+from src.openrouter_client import chat_completion
 
 def build_prompt(context_chunks, question):
     context_text = "\n\n".join([f"- {chunk}" for chunk, _ in context_chunks])
@@ -27,5 +20,14 @@ def ask_question_rag(question: str) -> str:
     context_chunks = get_top_k_docs(question)
     prompt = build_prompt(context_chunks, question)
 
-    response = model.generate_content(prompt)
-    return response.text.strip()
+    return chat_completion(
+        [
+            {
+                "role": "system",
+                "content": "You answer questions using the retrieved textbook context.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+        max_tokens=900,
+    ).strip()

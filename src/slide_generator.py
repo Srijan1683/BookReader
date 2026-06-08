@@ -1,14 +1,7 @@
 import os
 import re
 from dotenv import load_dotenv
-import google.generativeai as genai  # Correct import
-
-
-DEFAULT_GEMINI_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-001",
-]
+from src.openrouter_client import chat_completion, is_api_availability_error
 
 
 def _normalize_heading_text(text):
@@ -86,61 +79,37 @@ def _local_slide_fallback(heading_text):
     return slides
 
 
-def _is_quota_error(exc):
-    message = str(exc).lower()
-    return "429" in message or "quota" in message or "rate limit" in message
-
-
 def generate_slides(heading_text):
     normalized_heading_text = _normalize_heading_text(heading_text)
     if not normalized_heading_text:
         return _local_slide_fallback("")
 
     load_dotenv()
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-    prompt = f"""
-    You are a tutor generating high-quality study slides in Markdown format.
-
-    You will be given textbook content. Your task is to generate well-structured Markdown slides.
-
-    Format instructions:
-    1. Each slide must begin with a title using `# Slide Title`.
-    2. Follow the title with bullet points (`-`) or short paragraphs.
-    3. Use code blocks (```python ... ```) where needed.
-    4. Ensure slide titles correctly represent the content below them.
-    5. Return the response as a list of Markdown strings, one per slide.
-
-    Text:
-    {normalized_heading_text}
-    """
-
-    configured_model = os.getenv("GEMINI_MODEL")
-    candidate_models = [configured_model] if configured_model else DEFAULT_GEMINI_MODELS
     allow_local_fallback = os.getenv("ALLOW_LOCAL_SLIDE_FALLBACK", "true").lower() == "true"
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a tutor generating high-quality study slides in Markdown. "
+                "Each slide must begin with a title using '# Slide Title'. "
+                "Follow with concise bullet points or short paragraphs. "
+                "Use code blocks only when they are genuinely useful. "
+                "Return only Markdown slide content, with no surrounding explanation."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Create 2 to 4 study slides from this textbook content:\n\n{normalized_heading_text}",
+        },
+    ]
 
-    last_error = None
-    for model_name in candidate_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            break
-        except Exception as exc:
-            last_error = exc
-            if "not found" in str(exc).lower() or "404" in str(exc).lower():
-                continue
-            if allow_local_fallback and _is_quota_error(exc):
-                return _local_slide_fallback(normalized_heading_text)
-            raise
-    else:
-        if allow_local_fallback and last_error and _is_quota_error(last_error):
+    try:
+        text = chat_completion(messages, temperature=0.25, max_tokens=1400)
+    except Exception as exc:
+        if allow_local_fallback and is_api_availability_error(exc):
             return _local_slide_fallback(normalized_heading_text)
-        raise RuntimeError(
-            "No supported Gemini model was available. "
-            "Set GEMINI_MODEL in your .env to a model your API key can access."
-        ) from last_error
-
-    text = response.text
+        raise
 
     # Split into slides
     slides = []
