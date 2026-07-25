@@ -1,19 +1,7 @@
-# Core app
 streamlit==1.41.1
 python-dotenv==1.0.1
 nest-asyncio==1.6.0
 python-pptx==1.0.2
-
-# PDF parsing and test asset generation
 PyMuPDF==1.24.11
-
-# Local chapter segmentation and summarization
 numpy==1.26.4
-sentence-transformers==3.2.0
-
-# Optional legacy modules kept in the repo
-chromadb==0.5.16
-PyYAML==6.0.2
-
-# Tests
 pytest==8.3.3
