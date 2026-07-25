@@ -1,40 +1,74 @@
-# Book Reader
+# 📚 Book Reader
 
-Book Reader is a completed Streamlit application that turns textbook-style PDF or TXT documents into interactive study decks. It extracts a document outline, segments content by chapter and heading, generates Markdown slides with OpenRouter, lets users browse the deck, asks contextual chatbot questions, and exports the result as a PowerPoint file.
+**Turning textbooks into study decks — automatically.**
 
-## Features
+Book Reader is a Streamlit application that converts textbook-style PDF or TXT documents into interactive, chapter-aware study decks. It extracts document structure, segments content by chapter and heading, generates concise Markdown slides via OpenRouter, supports contextual chatbot Q&A on the active section, and exports the final deck as a downloadable PowerPoint file.
 
-- Upload PDF or TXT documents through a Streamlit web interface.
-- Extract PDF table-of-contents data with PyMuPDF.
-- Segment documents into chapter-level and heading-level study chunks.
-- Generate 2 to 4 concise study slides per heading with OpenRouter.
-- Use a local heuristic fallback when API access is unavailable.
-- Browse slides one at a time with previous and next controls.
-- Jump directly to a chapter or slide from dropdown navigation.
-- Display slide numbers in one continuous deck order.
-- Ask chatbot questions about the active slide section.
-- Export the generated deck as a downloadable `.pptx` file.
+This project was completed as a **B.Tech Computer Science and Engineering major project** at **Delhi Technical Campus, GGSIPU**.
 
-## Tech Stack
+**🔗 Live Demo:** [srijan-bookreader.streamlit.app](https://srijan-bookreader.streamlit.app)
+**🔗 GitHub:** [github.com/Srijan1683/BookReader](https://github.com/Srijan1683/BookReader)
 
-- **Python** for the application logic.
-- **Streamlit** for the web UI.
-- **OpenRouter** for slide generation and chatbot responses.
-- **PyMuPDF** for PDF parsing and table-of-contents extraction.
-- **python-pptx** for PowerPoint export.
-- **python-dotenv** for environment-backed configuration.
-- **pytest** for project tests.
+---
 
-## Application Flow
+## 🎓 Academic Evaluation
 
-1. `webapp.py` accepts the uploaded document and starts the generation flow.
-2. `src/utils.py` extracts pages and table-of-contents entries.
-3. `src/segmentor.py` groups the document into chapter and heading chunks.
-4. `src/slide_generator.py` generates Markdown slide content.
-5. `src/deck.py` normalizes slide titles and assigns global slide numbers.
-6. `webapp.py` renders the slide browser, chatbot, chapter/slide jump controls, and PowerPoint export.
+This project was submitted and graded as the final-year major project.
 
-## Project Structure
+| Evaluation Component            | Score        |
+|----------------------------------|--------------|
+| Dissertation & Viva Voce         | 93           |
+| Project Progress Evaluation      | 97           |
+| **Overall Percentage**           | **95%**      |
+| Final Semester CGPA              | **10**       |
+
+**Institution:** Delhi Technical Campus, GGSIPU (Guru Gobind Singh Indraprastha University)
+
+---
+
+## ✨ Features
+
+- Upload PDF or TXT documents through a clean Streamlit web interface
+- Extract PDF table-of-contents data with PyMuPDF
+- Segment documents into chapter-level and heading-level study chunks
+- Generate 2–4 concise study slides per heading using OpenRouter-hosted LLMs
+- Local heuristic fallback when API access is unavailable — the app never fully breaks
+- Browse the deck slide-by-slide with previous/next controls
+- Jump directly to any chapter or slide via dropdown navigation
+- Continuous, globally numbered slides across the whole deck
+- Ask a contextual chatbot questions about the currently active section
+- Export the full generated deck as a downloadable `.pptx` file
+
+## 🛠️ Tech Stack
+
+| Layer | Tools |
+|---|---|
+| UI | Streamlit |
+| LLM | OpenRouter (direct HTTP client — no SDK dependency) |
+| PDF Parsing | PyMuPDF |
+| Slide Export | python-pptx |
+| Config | python-dotenv |
+| Testing | pytest |
+
+## 🏗️ Architecture
+
+**Application flow:**
+
+1. `webapp.py` accepts the uploaded document and starts the generation flow
+2. `src/utils.py` extracts pages and table-of-contents entries
+3. `src/segmentor.py` groups the document into chapter and heading chunks
+4. `src/slide_generator.py` generates Markdown slide content via OpenRouter, with a local fallback path when the API is unavailable
+5. `src/deck.py` normalizes slide titles and assigns global slide numbers across the deck
+6. `webapp.py` renders the slide browser, chatbot, chapter/slide jump controls, and PowerPoint export
+
+**Key design decisions:**
+
+- OpenRouter is called directly through Python's standard HTTP library (`src/openrouter_client.py`) rather than the OpenAI SDK, avoiding SDK/proxy compatibility issues
+- The model is fully configurable via the `OPENROUTER_MODEL` environment variable — no hard-coded model IDs
+- A local heuristic slide generator acts as a graceful fallback (`ALLOW_LOCAL_SLIDE_FALLBACK`) if the API is down or unreachable
+- ChromaDB-backed retrieval (`rag/`) exists as an optional legacy path and is not part of the main production flow
+
+## 📁 Project Structure
 
 ```text
 Book-Reader-m/
@@ -54,34 +88,61 @@ Book-Reader-m/
 │   ├── llm.py                        # Prompt helper
 │   ├── prompts.yaml                  # Prompt templates
 │   └── vector_db.py                  # Vector search helper
-├── rag/
-│   ├── chat_engine.py                # Retrieval-backed chat helper
-│   ├── embed.py                      # Embedding helper
-│   └── retriever.py                  # Chroma retrieval helper
+├── rag/                               # Optional legacy retrieval-augmented chat
+│   ├── chat_engine.py
+│   ├── embed.py
+│   └── retriever.py
 ├── test_assets/
 │   └── book_reader_test.pdf          # Stable test input
 └── tests/
-    ├── test_deck.py                  # Deck numbering tests
-    ├── test_toc.py                   # TOC extraction tests
-    └── test_chapter_processor.py     # Chapter-processing debug helpers
+    ├── test_deck.py
+    ├── test_toc.py
+    └── test_chapter_processor.py
 ```
 
-## Main Commands
+## 🚀 Getting Started
 
-Run the app:
+**1. Clone and install dependencies:**
+
+```bash
+git clone https://github.com/Srijan1683/BookReader.git
+cd BookReader
+pip install -r requirements.txt
+```
+
+**2. Configure environment variables** (create a `.env` file):
+
+```
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_MODEL=your_model_id
+ALLOW_LOCAL_SLIDE_FALLBACK=true
+```
+
+**3. Run the app:**
 
 ```bash
 python -m streamlit run webapp.py
 ```
 
-Run tests:
+## 🧪 Testing
 
 ```bash
 pytest -q
 ```
 
-Run a syntax check:
+Run a quick syntax check across core modules:
 
 ```bash
 python -m py_compile webapp.py main.py src/openrouter_client.py src/slide_generator.py src/segmentor.py src/deck.py
 ```
+
+---
+
+## 👤 Author
+
+**Srijan Banerjee**
+B.Tech, Computer Science and Engineering — Delhi Technical Campus, GGSIPU
+
+- Portfolio: [srijan-banerjee.netlify.app](https://srijan-banerjee.netlify.app)
+- GitHub: [github.com/Srijan1683](https://github.com/Srijan1683)
+- LinkedIn: [linkedin.com/in/banerjee-srijan](https://www.linkedin.com/in/banerjee-srijan)
