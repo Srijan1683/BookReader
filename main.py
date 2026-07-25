@@ -5,10 +5,6 @@ from pathlib import Path
 import tempfile
 
 from dotenv import load_dotenv
-import importlib
-
-import src.slide_generator
-importlib.reload(src.slide_generator)
 
 from src.segmentor import process_chapter
 from src.utils import get_toc, get_chapter_segmented_toc

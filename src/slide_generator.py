@@ -93,6 +93,7 @@ def generate_slides(heading_text):
             "content": (
                 "You are a tutor generating high-quality study slides in Markdown. "
                 "Each slide must begin with a title using '# Slide Title'. "
+                "Do not number slide titles; the app assigns final slide numbers. "
                 "Follow with concise bullet points or short paragraphs. "
                 "Use code blocks only when they are genuinely useful. "
                 "Return only Markdown slide content, with no surrounding explanation."

@@ -91,12 +91,6 @@ class PromptGenerator:
                 raise ValueError(f"Prompt '{prompt_name}' not found in the configuration file.")
             return prompts[prompt_name]
 
-        with open(config_file, 'r') as file:
-            prompts = yaml.safe_load(file)
-            if prompt_name not in prompts:
-                raise ValueError(f"Prompt '{prompt_name}' not found in the configuration file.")
-            return prompts[prompt_name]
-
     def get_messages(self, **prompt_kwargs):
         """
         Formats the messages to be sent to the OpenRouter chat API.
@@ -141,7 +135,7 @@ class PromptGenerator:
 
     def update_usage(self, response):
         """
-        Updates the token usage statistics based on the response from the chat model.
+        Records token usage statistics from the chat model response.
 
         Args:
             response (object): The response object from the chat API.

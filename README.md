@@ -1,153 +1,77 @@
 # Book Reader
 
-Book Reader is a Streamlit app that turns textbook-style documents into interactive study decks. Upload a PDF or text file, generate chapter-aware slides with OpenRouter, browse the deck in the web UI, chat about the current section, and export the result as a PowerPoint presentation.
-
-The project is built as a practical study tool: part document parser, part slide generator, part lightweight learning assistant.
+Book Reader is a completed Streamlit application that turns textbook-style PDF or TXT documents into interactive study decks. It extracts a document outline, segments content by chapter and heading, generates Markdown slides with OpenRouter, lets users browse the deck, asks contextual chatbot questions, and exports the result as a PowerPoint file.
 
 ## Features
 
-- Process 2 document formats, PDF and TXT, through a Streamlit web app
-- Run a 4-stage document-to-slides pipeline: document ingestion, TOC extraction, chapter segmentation, and slide generation
-- Extract PDF table-of-contents data with PyMuPDF
-- Segment documents across 2 levels of granularity: chapter-level and heading-level chunks
-- Generate structured Markdown slide summaries with OpenRouter, requesting 2 to 4 study slides per heading chunk
-- Fall back to local heuristic slide generation for offline use when API access is unavailable
-- Browse generated slides in a two-column study interface
-- Chat with an OpenRouter-backed assistant before and after slide generation
-- Scope chat context to 1 active slide section after a deck is generated
-- Export generated slides as 1 downloadable `.pptx` PowerPoint file
-- Use a bundled test PDF for quick local debugging
+- Upload PDF or TXT documents through a Streamlit web interface.
+- Extract PDF table-of-contents data with PyMuPDF.
+- Segment documents into chapter-level and heading-level study chunks.
+- Generate 2 to 4 concise study slides per heading with OpenRouter.
+- Use a local heuristic fallback when API access is unavailable.
+- Browse slides one at a time with previous and next controls.
+- Jump directly to a chapter or slide from dropdown navigation.
+- Display slide numbers in one continuous deck order.
+- Ask chatbot questions about the active slide section.
+- Export the generated deck as a downloadable `.pptx` file.
 
 ## Tech Stack
 
-- **Python**: core application language
-- **Streamlit**: web UI
-- **OpenRouter**: LLM-backed slide generation and chat
-- **PyMuPDF**: PDF parsing and TOC extraction
-- **python-pptx**: PowerPoint export
-- **python-dotenv**: local environment configuration
-- **ChromaDB / sentence-transformers**: optional legacy RAG/vector modules
-- **pytest**: test runner
+- **Python** for the application logic.
+- **Streamlit** for the web UI.
+- **OpenRouter** for slide generation and chatbot responses.
+- **PyMuPDF** for PDF parsing and table-of-contents extraction.
+- **python-pptx** for PowerPoint export.
+- **python-dotenv** for environment-backed configuration.
+- **pytest** for project tests.
 
-OpenRouter is called directly with Python's standard HTTP library in `src/openrouter_client.py`. This avoids OpenAI SDK/httpx compatibility issues such as `Client.__init__() got an unexpected keyword argument 'proxies'`.
+## Application Flow
 
-## How It Works
-
-1. Document ingestion: the user uploads 1 of 2 supported formats, PDF or TXT, in `webapp.py`, and `main.py` starts the document-to-slides pipeline.
-2. TOC extraction: `src/utils.py` reads the uploaded document and extracts table-of-contents entries.
-3. Chapter segmentation: `src/segmentor.py` groups document content into 2 chunk levels: chapters and headings.
-4. Slide generation: `src/slide_generator.py` asks OpenRouter to create structured Markdown slide summaries for each heading chunk, with the prompt requesting 2 to 4 study slides.
-5. If API access is unavailable and fallback is enabled, local heuristic slide generation is used for offline operation.
-6. The Streamlit UI displays the deck, scopes chat to 1 active slide section, and offers 1 downloadable `.pptx` PowerPoint export.
+1. `webapp.py` accepts the uploaded document and starts the generation flow.
+2. `src/utils.py` extracts pages and table-of-contents entries.
+3. `src/segmentor.py` groups the document into chapter and heading chunks.
+4. `src/slide_generator.py` generates Markdown slide content.
+5. `src/deck.py` normalizes slide titles and assigns global slide numbers.
+6. `webapp.py` renders the slide browser, chatbot, chapter/slide jump controls, and PowerPoint export.
 
 ## Project Structure
 
 ```text
 Book-Reader-m/
-├── webapp.py                         # Streamlit web app and UI
-├── main.py                           # Main slide-generation pipeline
+├── webapp.py                         # Streamlit app and UI
+├── main.py                           # Document-to-slides pipeline
 ├── requirements.txt                  # Python dependencies
 ├── README.md                         # Project documentation
-├── .env.example                      # Example local environment variables
 ├── scripts/
-│   └── generate_test_pdf.py          # Regenerates the bundled test PDF
+│   └── generate_test_pdf.py          # Test PDF generator
 ├── src/
-│   ├── config.py                     # Environment-backed configuration values
+│   ├── deck.py                       # Slide normalization and deck flattening
 │   ├── models.py                     # Shared data models
-│   ├── openrouter_client.py          # Direct OpenRouter chat-completion client
+│   ├── openrouter_client.py          # OpenRouter chat-completion client
 │   ├── segmentor.py                  # Chapter and heading segmentation
-│   ├── slide_generator.py            # LLM slide generation plus local fallback
-│   ├── utils.py                      # PDF loading, TOC extraction, TOC grouping
-│   ├── llm.py                        # Legacy prompt helper using OpenRouter
+│   ├── slide_generator.py            # Slide generation plus local fallback
+│   ├── utils.py                      # PDF loading and TOC helpers
+│   ├── llm.py                        # Prompt helper
 │   ├── prompts.yaml                  # Prompt templates
-│   └── vector_db.py                  # Optional legacy vector DB helper
+│   └── vector_db.py                  # Vector search helper
 ├── rag/
-│   ├── chat_engine.py                # Optional RAG chat path
-│   ├── embed.py                      # Optional embedding helper
-│   └── retriever.py                  # Optional Chroma retrieval helper
+│   ├── chat_engine.py                # Retrieval-backed chat helper
+│   ├── embed.py                      # Embedding helper
+│   └── retriever.py                  # Chroma retrieval helper
 ├── test_assets/
 │   └── book_reader_test.pdf          # Stable test input
 └── tests/
+    ├── test_deck.py                  # Deck numbering tests
     ├── test_toc.py                   # TOC extraction tests
-    └── test_chapter_processor.py     # Debug helpers for chapter processing
+    └── test_chapter_processor.py     # Chapter-processing debug helpers
 ```
 
-## Setup
+## Main Commands
 
-Create and activate a virtual environment:
-
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Create your local environment file:
-
-```bash
-cp .env.example .env
-```
-
-Then add your OpenRouter API key to `.env`.
-
-## Environment Variables
-
-`.env.example` contains the expected local configuration:
-
-```bash
-OPENROUTER_API_KEY=sk-or-your-openrouter-key
-OPENROUTER_MODEL=openrouter/free
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_HTTP_REFERER=http://localhost:8501
-OPENROUTER_APP_TITLE=Book Reader
-
-ALLOW_LOCAL_SLIDE_FALLBACK=true
-BOOK_READER_TEST_PDF=test_assets/book_reader_test.pdf
-```
-
-`OPENROUTER_MODEL` can be any OpenRouter model ID. The default is `openrouter/free`, and you can switch to a specific model by changing only the `.env` value.
-
-The real `.env` file is ignored by git so API keys do not get committed.
-
-## Running The App
-
-Start Streamlit:
+Run the app:
 
 ```bash
 python -m streamlit run webapp.py
-```
-
-Open the local URL shown by Streamlit, usually:
-
-```text
-http://localhost:8501
-```
-
-In the app:
-
-1. Upload a PDF or TXT file.
-2. Click **Generate Slides from Text**.
-3. Browse the generated deck.
-4. Ask questions in the chatbot panel.
-5. Download the generated PowerPoint file.
-
-## Useful Commands
-
-Run the slide pipeline directly on the bundled test PDF:
-
-```bash
-python -c "from main import main; print(main('test_assets/book_reader_test.pdf'))"
-```
-
-Regenerate the bundled test PDF:
-
-```bash
-python scripts/generate_test_pdf.py
 ```
 
 Run tests:
@@ -156,22 +80,8 @@ Run tests:
 pytest -q
 ```
 
-Run a quick syntax check:
+Run a syntax check:
 
 ```bash
-python -m py_compile webapp.py main.py src/openrouter_client.py src/slide_generator.py src/segmentor.py
+python -m py_compile webapp.py main.py src/openrouter_client.py src/slide_generator.py src/segmentor.py src/deck.py
 ```
-
-## Current Limitations
-
-- AI-generated slides and chat require a valid OpenRouter key and a model with available capacity.
-- The local fallback is useful for development, but it is not as strong as LLM summarization.
-- The optional RAG/vector modules are still experimental compared with the main Streamlit workflow.
-- PDF quality matters: documents with unclear TOCs or unusual formatting may segment less cleanly.
-
-## Development Notes
-
-- Keep `.env` private; use `.env.example` for shareable configuration.
-- Prefer changing `OPENROUTER_MODEL` over hard-coding model IDs.
-- The main production path is `webapp.py` -> `main.py` -> `src/segmentor.py` -> `src/slide_generator.py`.
-- `test_assets/book_reader_test.pdf` is the quickest sanity-check input when working on parsing or slide generation.

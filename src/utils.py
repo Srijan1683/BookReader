@@ -2,7 +2,6 @@ import fitz
 from src.models import TOC, ChapterTOC, Page
 from contextlib import contextmanager
 import sqlite3
-import os
 
 
 @contextmanager

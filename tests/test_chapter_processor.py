@@ -1,14 +1,14 @@
 import sys
 import argparse
-import time
 from pathlib import Path
+from collections import defaultdict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.utils import *
-from src.models import TOC, ChapterTOC, Page, Headings
+from src.models import ChapterTOC, Page, Headings
+from src.utils import get_chapter_segmented_toc, get_pages, get_toc
 
 import unicodedata
 from difflib import SequenceMatcher
@@ -70,7 +70,6 @@ def segment_page_by_headings(page_text, headings):
     
     # Handle text before the first heading (if any)
     if heading_indices and heading_indices[0] > 1:
-        first_heading = headings[0]
         segments["pre_text"] = '\n'.join(page_lines[:heading_indices[0]]).strip()
 
     # Segment the text by the heading indices
@@ -172,8 +171,6 @@ def debug_chapter_segmented_toc(pdf_path):
         for toc_list in chapter_toc.chapter_toc_list:
             print(f"SUB TOC LIST:\t{toc_list}")
 
-
-from collections import defaultdict
 
 def debug_chapter_toc_dict(pdf_path):
     toc = get_toc(pdf_path)

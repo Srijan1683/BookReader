@@ -21,7 +21,7 @@ embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 def llm_response(text, context):
     
-    system_message = f"""
+    system_message = """
     You are a professor of mathematics, trained to answer questions from students based on your knwoledge and notes.
     """
 
@@ -47,7 +47,7 @@ def llm_response(text, context):
 
 def llm_response_null(text, context):
     
-    system_message = f"""
+    system_message = """
     You are a professor of mathematics, trained to answer questions from students based on your knwoledge.
     """
 

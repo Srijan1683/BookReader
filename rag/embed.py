@@ -1,7 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.utils import embedding_functions
-import os
 
 MODEL_NAME = "all-MiniLM-L6-v2"
 CHUNK_SIZE = 500  # characters

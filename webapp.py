@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from pptx import Presentation
 
 from main import main
+from src.deck import flatten_slide_deck, slides_to_plain_text
 from src.openrouter_client import chat_completion
 
 # Apply nest_asyncio to handle async loops in streamlit
@@ -56,28 +57,16 @@ def create_pptx(slides_dict):
     if slides_dict is None:
         raise ValueError("slides_dict is None. Cannot create PowerPoint slides.")
 
-    for chapter, sections in slides_dict.items():
-        for section, slide_markdown_list in sections.items():
-            slide = prs.slides.add_slide(content_slide_layout)
-            slide.shapes.title.text = f"{chapter} - {section}"
-            content = slide.placeholders[1]
-            content.text = _slides_to_plain_text(slide_markdown_list)
+    for slide_item in flatten_slide_deck(slides_dict):
+        slide = prs.slides.add_slide(content_slide_layout)
+        slide.shapes.title.text = f"Slide {slide_item['number']}: {slide_item['title']}"
+        content = slide.placeholders[1]
+        content.text = slides_to_plain_text([slide_item["markdown"]], include_titles=False)
 
     return prs
 
 def _slides_to_plain_text(slide_markdown_list):
-    plain_lines = []
-    for slide_markdown in slide_markdown_list:
-        for line in slide_markdown.splitlines():
-            cleaned = line.strip()
-            if not cleaned:
-                continue
-            if cleaned.startswith("# "):
-                plain_lines.append(cleaned[2:])
-            else:
-                plain_lines.append(cleaned)
-        plain_lines.append("")
-    return "\n".join(plain_lines).strip()
+    return slides_to_plain_text(slide_markdown_list)
 
 
 def _load_slides_into_state(json_path):
@@ -111,9 +100,9 @@ def _render_chat_message(role, text):
 def _render_chatbot(chapter_title=None, section_title=None, slide_markdown_list=None):
     has_slide_context = bool(chapter_title and section_title and slide_markdown_list)
     intro_copy = (
-        "Ask follow-up questions about the active section. API errors appear here without affecting the slide deck."
+        "Ask follow-up questions about the active section."
         if has_slide_context
-        else "Ask general study questions while you prepare a document. Once slides are generated, chat will use the active section."
+        else "Ask a study question while you prepare a document."
     )
 
     st.markdown(
@@ -130,30 +119,11 @@ def _render_chatbot(chapter_title=None, section_title=None, slide_markdown_list=
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    if "chat_input_version" not in st.session_state:
+        st.session_state.chat_input_version = 0
 
-    st.markdown("<div class='chat-shell'>", unsafe_allow_html=True)
-    if st.session_state.chat_history:
-        for chat in st.session_state.chat_history[::-1]:
-            _render_chat_message(chat["role"], chat["text"])
-    else:
-        initial_message = (
-            "Ask about the current section once slides are loaded."
-            if has_slide_context
-            else "Add your OpenRouter key in .env, then ask me a study question or generate slides from a document."
-        )
-        st.markdown(
-            f"""
-            <div class="chat-bubble chat-assistant">
-                <div class="chat-label">Assistant</div>
-                <div>{initial_message}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    with st.form("chat_form", clear_on_submit=True):
-        question = st.text_input("Type your question here:")
+    with st.form(f"chat_form_{st.session_state.chat_input_version}", clear_on_submit=True):
+        question = st.text_input("Type your question here:", key=f"chat_question_{st.session_state.chat_input_version}")
         submitted = st.form_submit_button("Ask")
 
     if submitted and question.strip():
@@ -195,7 +165,13 @@ Question:
             except Exception as e:
                 st.session_state.chat_history.append({"role": "user", "text": question})
                 st.session_state.chat_history.append({"role": "assistant", "text": f"Error: {e}"})
+        st.session_state.chat_input_version += 1
         st.rerun()
+
+    st.markdown("<div class='chat-shell'>", unsafe_allow_html=True)
+    for chat in st.session_state.chat_history:
+        _render_chat_message(chat["role"], chat["text"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 st.set_page_config(page_title="Book Slide Generator", layout="wide")
@@ -396,6 +372,25 @@ st.markdown(
             color: #eef9fb;
             border: 1px solid rgba(134, 223, 236, 0.12);
         }
+        [data-testid="stSelectbox"] [data-baseweb="select"],
+        [data-testid="stSelectbox"] [data-baseweb="select"] *,
+        [data-baseweb="popover"] [role="listbox"],
+        [data-baseweb="popover"] [role="option"] {
+            cursor: pointer !important;
+        }
+        [data-testid="stSelectbox"] input {
+            caret-color: transparent;
+            cursor: pointer !important;
+        }
+        [data-baseweb="popover"] [role="listbox"] {
+            max-height: min(70vh, 28rem) !important;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
+        }
+        [data-baseweb="popover"] [role="option"] {
+            min-height: 2.6rem;
+            align-items: center;
+        }
         [data-testid="stFileUploader"] {
             background: rgba(24, 31, 38, 0.9);
             border-radius: 18px;
@@ -480,21 +475,19 @@ if st.session_state.get("slides_generated", False):
     slides_dict = st.session_state.get("slides_dict", None)
 
     if slides_dict:
-        # Flatten slides into a list of (chapter_title, section_title, slide_markdown_list)
-        all_slides = [
-            (chapter, section, slide_markdown_list)
-            for chapter, sections in slides_dict.items()
-            for section, slide_markdown_list in sections.items()
-        ]
+        all_slides = flatten_slide_deck(slides_dict)
 
         # Initialize slide index
         if "slide_index" not in st.session_state or st.session_state.slide_index >= len(all_slides):
             st.session_state.slide_index = 0
 
         if all_slides:
-            chapter_title, section_title, slide_markdown_list = all_slides[st.session_state.slide_index]
+            slide_item = all_slides[st.session_state.slide_index]
+            chapter_title = slide_item["chapter"]
+            section_title = slide_item["section"]
+            slide_markdown_list = [slide_item["markdown"]]
             total_cards = len(all_slides)
-            current_card = st.session_state.slide_index + 1
+            current_card = slide_item["number"]
 
             left_col, right_col = st.columns([1.45, 0.95], gap="large")
 
@@ -506,11 +499,11 @@ if st.session_state.get("slides_generated", False):
                         <div class="meta-strip">
                             <div class="meta-card">
                                 <div class="meta-label">Current Chapter</div>
-                                <div class="meta-value">{chapter_title}</div>
+                                <div class="meta-value">{html.escape(chapter_title)}</div>
                             </div>
                             <div class="meta-card">
                                 <div class="meta-label">Current Section</div>
-                                <div class="meta-value">{section_title}</div>
+                                <div class="meta-value">{html.escape(section_title)}</div>
                             </div>
                             <div class="meta-card">
                                 <div class="meta-label">Deck Position</div>
@@ -522,6 +515,42 @@ if st.session_state.get("slides_generated", False):
                     unsafe_allow_html=True,
                 )
 
+                chapter_options = list(dict.fromkeys(item["chapter"] for item in all_slides))
+                selected_chapter = st.selectbox(
+                    "Jump to chapter",
+                    chapter_options,
+                    index=chapter_options.index(chapter_title),
+                )
+                if selected_chapter != chapter_title:
+                    st.session_state.slide_index = next(
+                        index for index, item in enumerate(all_slides) if item["chapter"] == selected_chapter
+                    )
+                    st.rerun()
+
+                chapter_slide_items = [
+                    item for item in all_slides if item["chapter"] == selected_chapter
+                ]
+                chapter_slide_labels = [
+                    f"Slide {item['number']}: {item['title']}" for item in chapter_slide_items
+                ]
+                selected_slide_label = st.selectbox(
+                    "Jump to slide",
+                    chapter_slide_labels,
+                    index=next(
+                        (
+                            index
+                            for index, item in enumerate(chapter_slide_items)
+                            if item["number"] == slide_item["number"]
+                        ),
+                        0,
+                    ),
+                )
+                selected_slide_index = chapter_slide_labels.index(selected_slide_label)
+                selected_slide = chapter_slide_items[selected_slide_index]
+                if selected_slide["number"] != slide_item["number"]:
+                    st.session_state.slide_index = selected_slide["number"] - 1
+                    st.rerun()
+
                 stage_left, stage_mid, stage_right = st.columns([0.18, 1, 0.18], gap="small")
                 with stage_left:
                     st.markdown("<div class='nav-rail'>", unsafe_allow_html=True)
@@ -530,23 +559,19 @@ if st.session_state.get("slides_generated", False):
                         st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
                 with stage_mid:
-                    for slide_markdown in slide_markdown_list:
-                        lines = [line for line in slide_markdown.splitlines() if line.strip()]
-                        title = lines[0][2:] if lines and lines[0].startswith("# ") else "Slide"
-                        body_lines = lines[1:] if len(lines) > 1 else []
-                        body_html = "".join(
-                            f"<div class='slide-line {'slide-heading' if line.startswith('## ') else ''}'>{line[3:] if line.startswith('## ') else line}</div>"
-                            for line in body_lines
-                        )
-                        st.markdown(
-                            f"""
-                            <div class="slide-card">
-                                <div class="slide-title">{title}</div>
-                                {body_html}
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                    body_html = "".join(
+                        f"<div class='slide-line {'slide-heading' if line.startswith('## ') else ''}'>{html.escape(line[3:] if line.startswith('## ') else line)}</div>"
+                        for line in slide_item["body_lines"]
+                    )
+                    st.markdown(
+                        f"""
+                        <div class="slide-card">
+                            <div class="slide-title">Slide {slide_item["number"]}: {html.escape(slide_item["title"])}</div>
+                            {body_html}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
                 with stage_right:
                     st.markdown("<div class='nav-rail'>", unsafe_allow_html=True)
                     if st.button(

@@ -1,10 +1,9 @@
 import unicodedata
+from collections import defaultdict
 from difflib import SequenceMatcher
 
-from src.utils import *
-from src.models import TOC, ChapterTOC, Page, Headings
-
-from collections import defaultdict
+from src.models import ChapterTOC, Headings
+from src.utils import get_pages
 
 def normalize_unicode(text):
     return unicodedata.normalize('NFKD', text)
@@ -62,7 +61,6 @@ def segment_page_by_headings(page_text, headings):
     
     # Handle text before the first heading (if any)
     if heading_indices and heading_indices[0] > 1:
-        first_heading = headings[0]
         segments["pre_text"] = '\n'.join(page_lines[:heading_indices[0]]).strip()
 
     # Segment the text by the heading indices
