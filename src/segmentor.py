@@ -51,21 +51,22 @@ def segment_page_by_headings(page_text, headings):
     segments = {}
     
     # Find the most similar line index for each heading
-    heading_indices = []
+    heading_matches = []
     for heading in headings:
-        idx, _ = find_most_similar_heading_index(page_lines, heading)
-        heading_indices.append(idx)
+        idx, score = find_most_similar_heading_index(page_lines, heading)
+        heading_matches.append((heading, idx, score))
     
-    # Sort indices to ensure they are in order
-    heading_indices.sort()
+    # Keep each heading paired with its semantic match; sorting bare indices can
+    # silently assign content to the wrong heading when a PDF TOC is out of order.
+    heading_matches.sort(key=lambda match: match[1])
+    heading_indices = [match[1] for match in heading_matches]
     
     # Handle text before the first heading (if any)
     if heading_indices and heading_indices[0] > 1:
         segments["pre_text"] = '\n'.join(page_lines[:heading_indices[0]]).strip()
 
     # Segment the text by the heading indices
-    for i, heading in enumerate(headings):
-        start_idx = heading_indices[i]
+    for i, (heading, start_idx, _) in enumerate(heading_matches):
         
         if i + 1 < len(heading_indices):
             end_idx = heading_indices[i + 1]
@@ -83,12 +84,12 @@ def segment_page_by_headings(page_text, headings):
 
     return segments
 
-def get_chapter_data(pdf_path, chapter_toc):
+def get_chapter_data(document_path, chapter_toc):
 
     start_page = chapter_toc.start_page
     end_page = chapter_toc.end_page
     chapter_page_numbers = range(start_page, end_page + 1, 1)
-    chapter_pages = get_pages(pdf_path, page_numbers=chapter_page_numbers)
+    chapter_pages = get_pages(document_path, page_numbers=chapter_page_numbers)
     
     chapter_toc_dict = defaultdict(list)
     for sub_toc_item in chapter_toc.chapter_toc_list:
@@ -98,15 +99,16 @@ def get_chapter_data(pdf_path, chapter_toc):
 
     return chapter_page_numbers, chapter_toc_dict, chapter_text_dict
 
-def process_chapter(pdf_path: str, chapter_toc: ChapterTOC):
+def process_chapter(document_path: str, chapter_toc: ChapterTOC):
+    """Stage 3: segment a chapter by semantic heading matches (two levels)."""
     
-    chapter_page_numbers, chapter_toc_dict, chapter_text_dict = get_chapter_data(pdf_path, chapter_toc)
+    chapter_page_numbers, chapter_toc_dict, chapter_text_dict = get_chapter_data(document_path, chapter_toc)
     res = []
     
     prev_segment_text = None  # Keep track of text that doesn't belong to a heading
 
     for page_num in chapter_page_numbers:
-        page_text = chapter_text_dict[page_num]
+        page_text = chapter_text_dict.get(page_num, "")
         if page_num in chapter_toc_dict:
             headings = chapter_toc_dict[page_num]
             segments = segment_page_by_headings(page_text, headings)
@@ -122,9 +124,11 @@ def process_chapter(pdf_path: str, chapter_toc: ChapterTOC):
 
             # Add each heading and its corresponding text as a new entry
             for heading_name, heading_text in segments.items():
+                if heading_name == "pre_text":
+                    continue
                 res.append(Headings(
                     title=heading_name,
-                    text=heading_text,
+                    text=heading_text or "",
                     page_number=page_num
                 ))
 
@@ -138,7 +142,13 @@ def process_chapter(pdf_path: str, chapter_toc: ChapterTOC):
 
         # Append any leftover text from the previous page or pre-heading text to the last heading's content
         if res and prev_segment_text:
-            res[-1].text += prev_segment_text
+            res[-1].text += "\n" + prev_segment_text
             prev_segment_text = None  # Clear after appending
+
+    # A chapter-only outline is still a valid first granularity level. Preserve
+    # its text as a single section instead of returning an empty deck.
+    if not res:
+        text = "\n".join(chapter_text_dict.values()).strip()
+        res.append(Headings(title="Overview", text=text, page_number=chapter_toc.start_page))
 
     return res
