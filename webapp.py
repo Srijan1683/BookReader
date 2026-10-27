@@ -3,6 +3,7 @@ import nest_asyncio
 import json
 import tempfile
 import html
+from hashlib import sha256
 from io import BytesIO
 
 import streamlit as st
@@ -11,7 +12,9 @@ from pptx import Presentation
 
 from main import main
 from src.deck import flatten_slide_deck, slides_to_plain_text
-from src.openrouter_client import chat_completion
+from src.chatbot import answer_document_question, answer_section_question
+from src.utils import get_pages
+from src.vector_store import index_document
 
 # Apply nest_asyncio to handle async loops in streamlit
 asyncio.set_event_loop(asyncio.new_event_loop())
@@ -97,12 +100,12 @@ def _render_chat_message(role, text):
     )
 
 
-def _render_chatbot(chapter_title=None, section_title=None, slide_markdown_list=None):
+def _render_chatbot(chapter_title=None, section_title=None, slide_markdown_list=None, document_id=None):
     has_slide_context = bool(chapter_title and section_title and slide_markdown_list)
     intro_copy = (
         "Ask follow-up questions about the active section."
         if has_slide_context
-        else "Ask a study question while you prepare a document."
+        else "Ask questions from the uploaded document before generating slides."
     )
 
     st.markdown(
@@ -130,36 +133,18 @@ def _render_chatbot(chapter_title=None, section_title=None, slide_markdown_list=
         question = question.strip()
         with st.spinner("Thinking..."):
             try:
-                if has_slide_context:
-                    user_content = f"""
-Chapter: {chapter_title}
-Section: {section_title}
-
-Slides:
-{_slides_to_plain_text(slide_markdown_list)}
-
-Question:
-{question}
-"""
-                    system_content = (
-                        "You answer student questions about the current book section. "
-                        "Use the provided slide content as your source and answer briefly."
-                    )
+                if not has_slide_context and document_id:
+                    answer, used_fallback = answer_document_question(question, document_id)
+                    if used_fallback:
+                        answer += "\n\n_Local heuristic fallback used while OpenRouter is unavailable._"
+                elif not has_slide_context:
+                    answer = "Upload a PDF or TXT document first, then I can answer questions from it."
                 else:
-                    user_content = question
-                    system_content = (
-                        "You are a helpful study assistant for a document-to-slides app. "
-                        "Answer clearly and briefly. If the user asks about uploaded slides, explain that slide context appears after generation."
+                    answer, used_fallback = answer_section_question(
+                        question, chapter_title, section_title, _slides_to_plain_text(slide_markdown_list)
                     )
-
-                answer = chat_completion(
-                    [
-                        {"role": "system", "content": system_content},
-                        {"role": "user", "content": user_content},
-                    ],
-                    temperature=0.2,
-                    max_tokens=700,
-                ).strip()
+                    if used_fallback:
+                        answer += "\n\n_Local heuristic fallback used while OpenRouter is unavailable._"
                 st.session_state.chat_history.append({"role": "user", "text": question})
                 st.session_state.chat_history.append({"role": "assistant", "text": answer})
             except Exception as e:
@@ -450,9 +435,23 @@ with setup_left:
 
     if uploaded_file:
         file_ext = uploaded_file.name.split('.')[-1].lower()
+        uploaded_bytes = uploaded_file.getvalue()
+        document_id = sha256(uploaded_bytes).hexdigest()
         with tempfile.NamedTemporaryFile(delete=False, suffix="." + file_ext) as tmp_file:
-            tmp_file.write(uploaded_file.read())
+            tmp_file.write(uploaded_bytes)
             tmp_path = tmp_file.name
+
+        if st.session_state.get("indexed_document_id") != document_id:
+            try:
+                with st.spinner("Indexing document for chatbot Q&A..."):
+                    chunk_count = index_document(document_id, get_pages(tmp_path))
+                st.session_state.indexed_document_id = document_id
+                st.session_state.chat_history = []
+                # A newly uploaded source must not continue showing the prior deck.
+                st.session_state.slides_generated = False
+                st.caption(f"Chatbot ready: indexed {chunk_count} document chunks in local ChromaDB.")
+            except Exception as exc:
+                st.warning(f"Document chat indexing is unavailable: {exc}")
 
         # Button to trigger slide generation
         if st.button("Generate Slides from Text"):
@@ -468,7 +467,7 @@ with setup_left:
 
 if not st.session_state.get("slides_generated", False):
     with setup_right:
-        _render_chatbot()
+        _render_chatbot(document_id=st.session_state.get("indexed_document_id"))
 
 if st.session_state.get("slides_generated", False):
     # Retrieve slides data from session state

@@ -48,6 +48,7 @@ This project was submitted and graded as the final-year major project.
 | PDF Parsing | PyMuPDF |
 | Slide Export | python-pptx |
 | Config | python-dotenv |
+| Semantic store | ChromaDB (local persistent vector-store module) |
 | Testing | pytest |
 
 ## 🏗️ Architecture
@@ -56,7 +57,7 @@ This project was submitted and graded as the final-year major project.
 
 1. `webapp.py` accepts the uploaded document and starts the generation flow
 2. `src/utils.py` extracts pages and table-of-contents entries
-3. `src/segmentor.py` groups the document into chapter and heading chunks
+3. `src/segmentor.py` groups the document into chapter and heading chunks using semantic heading matching
 4. `src/slide_generator.py` generates Markdown slide content via OpenRouter, with a local fallback path when the API is unavailable
 5. `src/deck.py` normalizes slide titles and assigns global slide numbers across the deck
 6. `webapp.py` renders the slide browser, chatbot, chapter/slide jump controls, and PowerPoint export
@@ -66,7 +67,7 @@ This project was submitted and graded as the final-year major project.
 - OpenRouter is called directly through Python's standard HTTP library (`src/openrouter_client.py`) rather than the OpenAI SDK, avoiding SDK/proxy compatibility issues
 - The model is fully configurable via the `OPENROUTER_MODEL` environment variable — no hard-coded model IDs
 - A local heuristic slide generator acts as a graceful fallback (`ALLOW_LOCAL_SLIDE_FALLBACK`) if the API is down or unreachable
-- ChromaDB-backed retrieval (`rag/`) exists as an optional legacy path and is not part of the main production flow
+- Every uploaded document is chunked and indexed in local ChromaDB before slide generation, allowing the chatbot to retrieve source context for pre-generation Q&A; active-slide Q&A takes precedence once a deck exists
 
 ## 📁 Project Structure
 

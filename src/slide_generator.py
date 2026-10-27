@@ -39,10 +39,10 @@ def _sentence_to_summary_point(sentence):
     return cleaned.rstrip(".")
 
 
-def _local_slide_fallback(heading_text):
+def _local_slide_fallback(heading_text, section_title=None):
     normalized_heading_text = _normalize_heading_text(heading_text)
     lines = [line.strip() for line in normalized_heading_text.splitlines() if line.strip()]
-    title = lines[0][:70] if lines else "Generated Summary"
+    title = _normalize_heading_text(section_title) or (lines[0][:70] if lines else "Generated Summary")
 
     body_text = "\n".join(lines[1:]) if len(lines) > 1 else normalized_heading_text
     sentences = _split_sentences(body_text)
@@ -79,10 +79,10 @@ def _local_slide_fallback(heading_text):
     return slides
 
 
-def generate_slides(heading_text):
+def generate_slides(heading_text, section_title=None):
     normalized_heading_text = _normalize_heading_text(heading_text)
     if not normalized_heading_text:
-        return _local_slide_fallback("")
+        return _local_slide_fallback("", section_title)
 
     load_dotenv()
 
@@ -101,7 +101,7 @@ def generate_slides(heading_text):
         },
         {
             "role": "user",
-            "content": f"Create 2 to 4 study slides from this textbook content:\n\n{normalized_heading_text}",
+            "content": f"Create 2 to 4 study slides for the section '{section_title or 'Document section'}' from this textbook content:\n\n{normalized_heading_text}",
         },
     ]
 
@@ -109,7 +109,7 @@ def generate_slides(heading_text):
         text = chat_completion(messages, temperature=0.25, max_tokens=1400)
     except Exception as exc:
         if allow_local_fallback and is_api_availability_error(exc):
-            return _local_slide_fallback(normalized_heading_text)
+            return _local_slide_fallback(normalized_heading_text, section_title)
         raise
 
     # Split into slides
