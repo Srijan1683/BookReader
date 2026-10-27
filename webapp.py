@@ -84,6 +84,8 @@ def _load_slides_into_state(json_path):
     st.session_state.slides_dict = slides_dict
     st.session_state.slide_index = 0
     st.session_state.pptx_bytes = pptx_io.getvalue()
+    # Pre-generation document chat has a different context from the slide deck.
+    st.session_state.chat_history = []
 
 
 def _render_chat_message(role, text):
@@ -484,7 +486,13 @@ if st.session_state.get("slides_generated", False):
             slide_item = all_slides[st.session_state.slide_index]
             chapter_title = slide_item["chapter"]
             section_title = slide_item["section"]
-            slide_markdown_list = [slide_item["markdown"]]
+            # A section can produce several slides. Keep chat scoped to the
+            # active chapter/section, rather than restricting it to one card.
+            slide_markdown_list = [
+                item["markdown"]
+                for item in all_slides
+                if item["chapter"] == chapter_title and item["section"] == section_title
+            ]
             total_cards = len(all_slides)
             current_card = slide_item["number"]
 

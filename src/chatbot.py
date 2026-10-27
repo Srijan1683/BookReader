@@ -20,7 +20,12 @@ def answer_section_question(question: str, chapter: str, section: str, section_m
     messages = [
         {
             "role": "system",
-            "content": "Answer briefly using only the supplied active document section. State when the section does not contain the answer.",
+            "content": (
+                "Answer briefly using only the supplied active document section. "
+                "Use and connect details across all supplied slides. Do not say the "
+                "section lacks an answer merely because the question is phrased differently; "
+                "only say that when there is genuinely no supporting information."
+            ),
         },
         {
             "role": "user",
