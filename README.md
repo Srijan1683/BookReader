@@ -1,8 +1,8 @@
-# 📚 Book Reader
+# 📚 AI Powered Slide Generator and Chatbot for Document Summarisation
 
 **Turning textbooks into study decks — automatically.**
 
-Book Reader is a Streamlit application that converts textbook-style PDF or TXT documents into interactive, chapter-aware study decks. It extracts document structure, segments content by chapter and heading, generates concise Markdown slides via OpenRouter, supports contextual chatbot Q&A on the active section, and exports the final deck as a downloadable PowerPoint file.
+AI Powered Slide Generator and Chatbot for Document Summarisation is a Streamlit application that converts textbook-style PDF or TXT documents into interactive, chapter-aware study decks. It extracts document structure, segments content by chapter and heading, generates concise Markdown slides via OpenRouter, supports contextual chatbot Q&A on the active section, and exports the final deck as a downloadable PowerPoint file.
 
 This project was completed as a **B.Tech Computer Science and Engineering major project** at **Delhi Technical Campus, GGSIPU**.
 
